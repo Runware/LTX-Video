@@ -323,7 +323,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
             configs = json.loads(metadata["config"])
             transformer_config = configs["transformer"]
             with torch.device("meta"):
-                transformer = Transformer3DModel.from_config(transformer_config)
+                transformer = cls.from_config(transformer_config)
             transformer.load_state_dict(comfy_single_file_state_dict, assign=True)
         return transformer
 
