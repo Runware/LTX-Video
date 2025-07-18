@@ -45,11 +45,6 @@ from ltx_video.models.autoencoders.vae_encode import (
 )
 
 
-try:
-    import torch_xla.distributed.spmd as xs
-except ImportError:
-    xs = None
-
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
@@ -795,6 +790,7 @@ class LTXVideoPipeline(DiffusionPipeline):
         text_encoder_max_tokens: int = 256,
         stochastic_sampling: bool = False,
         media_items: Optional[torch.Tensor] = None,
+        tone_map_compression_ratio: float = 0.0,
         **kwargs,
     ) -> Union[ImagePipelineOutput, Tuple]:
         """
@@ -876,6 +872,8 @@ class LTXVideoPipeline(DiffusionPipeline):
                 If set to `True`, the sampling is stochastic. If set to `False`, the sampling is deterministic.
             media_items ('torch.Tensor', *optional*):
                 The input media item used for image-to-image / video-to-video.
+            tone_map_compression_ratio: compression ratio for tone mapping, defaults to 0.0.
+                        If set to 0.0, no tone mapping is applied. If set to 1.0 - full compression is applied.
         Examples:
 
         Returns:
@@ -978,10 +976,6 @@ class LTXVideoPipeline(DiffusionPipeline):
                 guidance_scale[guidance_mapping[i]] for i in range(len(timesteps))
             ]
 
-        # For simplicity, we are using a constant num_conds for all timesteps, so we need to zero
-        # out cases where the guidance scale should not be applied.
-        guidance_scale = [x if x > 1.0 else 0.0 for x in guidance_scale]
-
         if not isinstance(stg_scale, List):
             stg_scale = [stg_scale] * len(timesteps)
         else:
@@ -994,16 +988,6 @@ class LTXVideoPipeline(DiffusionPipeline):
                 rescaling_scale[guidance_mapping[i]] for i in range(len(timesteps))
             ]
 
-        do_classifier_free_guidance = any(x > 1.0 for x in guidance_scale)
-        do_spatio_temporal_guidance = any(x > 0.0 for x in stg_scale)
-        do_rescaling = any(x != 1.0 for x in rescaling_scale)
-
-        num_conds = 1
-        if do_classifier_free_guidance:
-            num_conds += 1
-        if do_spatio_temporal_guidance:
-            num_conds += 1
-
         # Normalize skip_block_list to always be None or a list of lists matching timesteps
         if skip_block_list is not None:
             # Convert single list to list of lists if needed
@@ -1014,17 +998,6 @@ class LTXVideoPipeline(DiffusionPipeline):
                 for i, timestep in enumerate(timesteps):
                     new_skip_block_list.append(skip_block_list[guidance_mapping[i]])
                 skip_block_list = new_skip_block_list
-
-        # Prepare skip layer masks
-        skip_layer_masks: Optional[List[torch.Tensor]] = None
-        if do_spatio_temporal_guidance:
-            if skip_block_list is not None:
-                skip_layer_masks = [
-                    self.transformer.create_skip_layer_mask(
-                        batch_size, num_conds, num_conds - 1, skip_blocks
-                    )
-                    for skip_blocks in skip_block_list
-                ]
 
         if enhance_prompt:
             self.prompt_enhancer_image_caption_model = (
@@ -1055,7 +1028,7 @@ class LTXVideoPipeline(DiffusionPipeline):
             negative_prompt_attention_mask,
         ) = self.encode_prompt(
             prompt,
-            do_classifier_free_guidance,
+            True,
             negative_prompt=negative_prompt,
             num_images_per_prompt=num_images_per_prompt,
             device=device,
@@ -1073,23 +1046,28 @@ class LTXVideoPipeline(DiffusionPipeline):
 
         prompt_embeds_batch = prompt_embeds
         prompt_attention_mask_batch = prompt_attention_mask
-        if do_classifier_free_guidance:
-            prompt_embeds_batch = torch.cat(
-                [negative_prompt_embeds, prompt_embeds], dim=0
-            )
-            prompt_attention_mask_batch = torch.cat(
-                [negative_prompt_attention_mask, prompt_attention_mask], dim=0
-            )
-        if do_spatio_temporal_guidance:
-            prompt_embeds_batch = torch.cat([prompt_embeds_batch, prompt_embeds], dim=0)
-            prompt_attention_mask_batch = torch.cat(
-                [
-                    prompt_attention_mask_batch,
-                    prompt_attention_mask,
-                ],
-                dim=0,
-            )
+        negative_prompt_embeds = (
+            torch.zeros_like(prompt_embeds)
+            if negative_prompt_embeds is None
+            else negative_prompt_embeds
+        )
+        negative_prompt_attention_mask = (
+            torch.zeros_like(prompt_attention_mask)
+            if negative_prompt_attention_mask is None
+            else negative_prompt_attention_mask
+        )
 
+        prompt_embeds_batch = torch.cat(
+            [negative_prompt_embeds, prompt_embeds, prompt_embeds], dim=0
+        )
+        prompt_attention_mask_batch = torch.cat(
+            [
+                negative_prompt_attention_mask,
+                prompt_attention_mask,
+                prompt_attention_mask,
+            ],
+            dim=0,
+        )
         # 4. Prepare the initial latents using the provided media and conditioning items
 
         # Prepare the initial latents tensor, shape = (b, c, f, h, w)
@@ -1098,7 +1076,7 @@ class LTXVideoPipeline(DiffusionPipeline):
             media_items=media_items,
             timestep=timesteps[0],
             latent_shape=latent_shape,
-            dtype=prompt_embeds_batch.dtype,
+            dtype=prompt_embeds.dtype,
             device=device,
             generator=generator,
             vae_per_channel_normalize=vae_per_channel_normalize,
@@ -1118,14 +1096,6 @@ class LTXVideoPipeline(DiffusionPipeline):
         )
         init_latents = latents.clone()  # Used for image_cond_noise_update
 
-        pixel_coords = torch.cat([pixel_coords] * num_conds)
-        orig_conditioning_mask = conditioning_mask
-        if conditioning_mask is not None and is_video:
-            assert num_images_per_prompt == 1
-            conditioning_mask = torch.cat([conditioning_mask] * num_conds)
-        fractional_coords = pixel_coords.to(torch.float32)
-        fractional_coords[:, 0] = fractional_coords[:, 0] * (1.0 / frame_rate)
-
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
@@ -1134,8 +1104,50 @@ class LTXVideoPipeline(DiffusionPipeline):
             len(timesteps) - num_inference_steps * self.scheduler.order, 0
         )
 
+        orig_conditioning_mask = conditioning_mask
+
+        # Befor compiling this code please be aware:
+        # This code might generate different input shapes if some timesteps have no STG or CFG.
+        # This means that the codes might need to be compiled mutliple times.
+        # To avoid that, use the same STG and CFG values for all timesteps.
+
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                do_classifier_free_guidance = guidance_scale[i] > 1.0
+                do_spatio_temporal_guidance = stg_scale[i] > 0
+                do_rescaling = rescaling_scale[i] != 1.0
+
+                num_conds = 1
+                if do_classifier_free_guidance:
+                    num_conds += 1
+                if do_spatio_temporal_guidance:
+                    num_conds += 1
+
+                if do_classifier_free_guidance and do_spatio_temporal_guidance:
+                    indices = slice(batch_size * 0, batch_size * 3)
+                elif do_classifier_free_guidance:
+                    indices = slice(batch_size * 0, batch_size * 2)
+                elif do_spatio_temporal_guidance:
+                    indices = slice(batch_size * 1, batch_size * 3)
+                else:
+                    indices = slice(batch_size * 1, batch_size * 2)
+
+                # Prepare skip layer masks
+                skip_layer_mask: Optional[torch.Tensor] = None
+                if do_spatio_temporal_guidance:
+                    if skip_block_list is not None:
+                        skip_layer_mask = self.transformer.create_skip_layer_mask(
+                            batch_size, num_conds, num_conds - 1, skip_block_list[i]
+                        )
+
+                batch_pixel_coords = torch.cat([pixel_coords] * num_conds)
+                conditioning_mask = orig_conditioning_mask
+                if conditioning_mask is not None and is_video:
+                    assert num_images_per_prompt == 1
+                    conditioning_mask = torch.cat([conditioning_mask] * num_conds)
+                fractional_coords = batch_pixel_coords.to(torch.float32)
+                fractional_coords[:, 0] = fractional_coords[:, 0] * (1.0 / frame_rate)
+
                 if conditioning_mask is not None and image_cond_noise_scale > 0.0:
                     latents = self.add_noise_to_image_conditioning_latents(
                         t,
@@ -1194,16 +1206,12 @@ class LTXVideoPipeline(DiffusionPipeline):
                     noise_pred = self.transformer(
                         latent_model_input.to(self.transformer.dtype),
                         indices_grid=fractional_coords,
-                        encoder_hidden_states=prompt_embeds_batch.to(
+                        encoder_hidden_states=prompt_embeds_batch[indices].to(
                             self.transformer.dtype
                         ),
-                        encoder_attention_mask=prompt_attention_mask_batch,
+                        encoder_attention_mask=prompt_attention_mask_batch[indices],
                         timestep=current_timestep,
-                        skip_layer_mask=(
-                            skip_layer_masks[i]
-                            if skip_layer_masks is not None
-                            else None
-                        ),
+                        skip_layer_mask=skip_layer_mask,
                         skip_layer_strategy=skip_layer_strategy,
                         return_dict=False,
                     )[0]
@@ -1315,6 +1323,7 @@ class LTXVideoPipeline(DiffusionPipeline):
                 )
             else:
                 decode_timestep = None
+            latents = self.tone_map_latents(latents, tone_map_compression_ratio)
             image = vae_decode(
                 latents,
                 self.vae,
@@ -1735,6 +1744,47 @@ class LTXVideoPipeline(DiffusionPipeline):
         # Trim down to a multiple of temporal_scale_factor frames plus 1
         num_frames = (num_frames - 1) // scale_factor * scale_factor + 1
         return num_frames
+
+    @staticmethod
+    def tone_map_latents(
+        latents: torch.Tensor,
+        compression: float,
+    ) -> torch.Tensor:
+        """
+        Applies a non-linear tone-mapping function to latent values to reduce their dynamic range
+        in a perceptually smooth way using a sigmoid-based compression.
+
+        This is useful for regularizing high-variance latents or for conditioning outputs
+        during generation, especially when controlling dynamic behavior with a `compression` factor.
+
+        Parameters:
+        ----------
+        latents : torch.Tensor
+            Input latent tensor with arbitrary shape. Expected to be roughly in [-1, 1] or [0, 1] range.
+        compression : float
+            Compression strength in the range [0, 1].
+            - 0.0: No tone-mapping (identity transform)
+            - 1.0: Full compression effect
+
+        Returns:
+        -------
+        torch.Tensor
+            The tone-mapped latent tensor of the same shape as input.
+        """
+        if not (0 <= compression <= 1):
+            raise ValueError("Compression must be in the range [0, 1]")
+
+        # Remap [0-1] to [0-0.75] and apply sigmoid compression in one shot
+        scale_factor = compression * 0.75
+        abs_latents = torch.abs(latents)
+
+        # Sigmoid compression: sigmoid shifts large values toward 0.2, small values stay ~1.0
+        # When scale_factor=0, sigmoid term vanishes, when scale_factor=0.75, full effect
+        sigmoid_term = torch.sigmoid(4.0 * scale_factor * (abs_latents - 1.0))
+        scales = 1.0 - 0.8 * scale_factor * sigmoid_term
+
+        filtered = latents * scales
+        return filtered
 
 
 def adain_filter_latent(
