@@ -39,4 +39,4 @@ test = [
 include = ["ltx_video*"]
 
 [tool.setuptools.package-data]
-ltx_video = ["configs/*.yaml"]
+ltx_video = ["configs/*.yaml", "**/*.cpp", "**/*.cu"]
