@@ -33,25 +33,26 @@ build_repo_dir = pathlib.Path(
 
 build_repo_dir.mkdir(parents=True, exist_ok=True)  # avoid nvcc crash
 
-for (name, src_l) in [
-    ("pixel_norm", source_list_pixel_norm),
-    ("inplace_add", source_list_inplace_add)
-]:
-    hasher = sha256()
-    for f in src_l:
-        hasher.update(pathlib.Path(f).read_bytes())
-    hd = hasher.hexdigest()
-    if not (saved_sha := build_repo_dir / name / ".sha256").exists() or saved_sha.read_text() != hd:
-        so = load(
-            name=name,
-            sources=src_l,
-            build_directory=build_repo_dir,
-        )
-        saved_sha.write_text(hd)
-    else:
-        import torch.ops
-        so = torch.ops.load_library(build_repo_dir / name / f"{name}.so")
-    setattr(sys.modules[__name__], name, so)  # save globally
+if not os.getenv("RUNWARE_LTX_NO_COMPILE_KERNELS"):
+    for (name, src_l) in [
+        ("pixel_norm", source_list_pixel_norm),
+        ("inplace_add", source_list_inplace_add)
+    ]:
+        hasher = sha256()
+        for f in src_l:
+            hasher.update(pathlib.Path(f).read_bytes())
+        hd = hasher.hexdigest()
+        if not (saved_sha := build_repo_dir / name / ".sha256").exists() or saved_sha.read_text() != hd:
+            so = load(
+                name=name,
+                sources=src_l,
+                build_directory=build_repo_dir,
+            )
+            saved_sha.write_text(hd)
+        else:
+            import torch.ops
+            so = torch.ops.load_library(build_repo_dir / name / f"{name}.so")
+        setattr(sys.modules[__name__], name, so)  # save globally
 
 
 def pixel_norm_inplace(x, scale, shift, eps=1e-5):

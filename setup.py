@@ -48,19 +48,20 @@ def compile_object(name: str, src: list[str]):
 
 
 if __name__ == "__main__":
-    compile_object(
-        name="pixel_norm",
-        src=[
-            str(KERNELS_REPO / "pixel_norm.cpp"),
-            str(KERNELS_REPO / "pixel_norm_cuda.cu"),
-        ],
-    )
-    compile_object(
-        name="inplace_add",
-        src=[
-            str(KERNELS_REPO / "add_inplace.cpp"),
-            str(KERNELS_REPO / "add_inplace_cuda.cu"),
-        ],
-    )
+    if not os.getenv("RUNWARE_LTX_NO_COMPILE_KERNELS"):
+        compile_object(
+            name="pixel_norm",
+            src=[
+                str(KERNELS_REPO / "pixel_norm.cpp"),
+                str(KERNELS_REPO / "pixel_norm_cuda.cu"),
+            ],
+        )
+        compile_object(
+            name="inplace_add",
+            src=[
+                str(KERNELS_REPO / "add_inplace.cpp"),
+                str(KERNELS_REPO / "add_inplace_cuda.cu"),
+            ],
+        )
     setup()
 
