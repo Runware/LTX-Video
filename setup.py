@@ -18,6 +18,17 @@ cu_str = ('cpu' if torch.version.cuda is None else
                   f'cu{torch.version.cuda.replace(".", "")}')
 python_version = f'py{sys.version_info.major}{sys.version_info.minor}{getattr(sys, "abiflags", "")}'
 
+dependencies = [
+    "torch>=2.1.0",
+    "diffusers>=0.28.2",
+    "transformers>=4.47.2,<4.52.0",
+    "sentencepiece>=0.1.96",
+    "huggingface-hub~=0.30",
+    "einops",
+    "timm"
+] if not os.getenv("RUNWARE_LTX_BUILD_STAGE") else []
+print(f"{dependencies=}")
+
 home_dir = pathlib.Path(os.path.expanduser("~"))
 build_repo_dir = pathlib.Path(
     os.getenv("RUNWARE_LTX_TORCH_COMPILE_DIR")  # mutable path for prod build
@@ -63,5 +74,7 @@ if __name__ == "__main__":
                 str(KERNELS_REPO / "add_inplace_cuda.cu"),
             ],
         )
-    setup()
+    setup(
+        install_requires=dependencies
+    )
 
