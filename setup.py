@@ -7,10 +7,6 @@ from torch.utils.cpp_extension import load
 import torch.version
 import sys
 
-
-build_dir = os.getenv("RUNWARE_TORCH_COMPILE_DIR")
-if build_dir:
-    pathlib.Path(build_dir).mkdir(exist_ok=True, parents=True)
 BASE_PATH = pathlib.Path(__file__).parent
 KERNELS_REPO = BASE_PATH / "ltx_video" / "models" / "autoencoders" / "vae_patcher" / "kernels"
 
