@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+PKG_ROOT="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.."
+
+cd "$PKG_ROOT" || exit 1
+
+python -m ltx_video --verbose load-all-kernels $@

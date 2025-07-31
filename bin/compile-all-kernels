@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+PKG_ROOT="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.."
+
+cd "$PKG_ROOT" || exit 1
+
+./bin/ltx_video --verbose compile-kernels \
+  --arch-list "${TORCH_CUDA_ARCH_LIST:-8.6;9.0}" \
+  $@
