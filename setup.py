@@ -57,7 +57,7 @@ def compile_object(name: str, src: list[str]):
 if __name__ == "__main__":
     if not os.getenv("RUNWARE_LTX_NO_COMPILE_KERNELS"):
         compile_object(
-            name="pixel_norm",
+            name="pixel_norm_in_place",
             src=[
                 str(KERNELS_REPO / "pixel_norm.cpp"),
                 str(KERNELS_REPO / "pixel_norm_cuda.cu"),

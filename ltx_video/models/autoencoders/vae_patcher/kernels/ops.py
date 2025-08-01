@@ -35,7 +35,7 @@ build_repo_dir.mkdir(parents=True, exist_ok=True)  # avoid nvcc crash
 
 if not os.getenv("RUNWARE_LTX_NO_COMPILE_KERNELS"):
     for (name, src_l) in [
-        ("pixel_norm", source_list_pixel_norm),
+        ("pixel_norm_in_place", source_list_pixel_norm),
         ("inplace_add", source_list_inplace_add)
     ]:
         hasher = sha256()
