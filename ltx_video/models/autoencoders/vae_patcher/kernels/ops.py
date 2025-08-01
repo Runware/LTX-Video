@@ -13,7 +13,7 @@ python_version = (
     f"py{sys.version_info.major}{sys.version_info.minor}{getattr(sys, 'abiflags', '')}"
 )
 
-_pixel_norm_in_place = None
+_pixel_norm_inplace = None
 _inplace_add = None
 
 
@@ -43,7 +43,7 @@ build_repo_dir.mkdir(parents=True, exist_ok=True)  # avoid nvcc crash
 
 if not os.getenv("RUNWARE_LTX_NO_COMPILE_KERNELS"):
     for name, src_l in [
-        ("pixel_norm_in_place", source_list_pixel_norm),
+        ("pixel_norm_inplace", source_list_pixel_norm),
         ("inplace_add", source_list_inplace_add),
     ]:
         hasher = sha256()
@@ -54,10 +54,11 @@ if not os.getenv("RUNWARE_LTX_NO_COMPILE_KERNELS"):
             not (saved_sha := build_repo_dir / name / ".sha256").exists()
             or saved_sha.read_text() != hd
         ):
+            (build_dir := build_repo_dir / name).mkdir(exist_ok=True, parents=True)
             so = load(
                 name=name,
                 sources=src_l,
-                build_directory=build_repo_dir,
+                build_directory=build_dir,
             )
             saved_sha.write_text(hd)
         else:
@@ -69,7 +70,7 @@ if not os.getenv("RUNWARE_LTX_NO_COMPILE_KERNELS"):
 
 
 def pixel_norm_inplace(x, scale, shift, eps=1e-5):
-    return _pixel_norm_in_place.pixel_norm_inplace(x, scale, shift, eps)  # type: ignore - guaranteed to be there
+    return _pixel_norm_inplace.pixel_norm_inplace(x, scale, shift, eps)  # type: ignore - guaranteed to be there
 
 
 def add_inplace(x, workspace, offset):
