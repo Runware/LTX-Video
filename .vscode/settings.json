@@ -1,0 +1,36 @@
+{
+    "editor.formatOnSave": true,
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.useLibraryCodeForTypes": true,
+    "python.languageServer": "Pylance",
+    "ruff.nativeServer": "on",
+    "python.analysis.typeCheckingMode": "standard",
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "editor.tabSize": 4,
+    "editor.detectIndentation": false,
+    "editor.renderWhitespace": "all",
+    "editor.rulers": [
+        120
+    ],
+    "workbench.colorTheme": "Default Dark Modern",
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/.venv": true,
+        "**/.mypy_cache": true,
+        "**/.pytest_cache": true,
+        "**/.vscode": false
+    },
+    "[python]": {
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit"
+        }
+    },
+    "search.exclude": {
+        "**/__pycache__": true,
+        "**/.venv": true,
+        "**/.mypy_cache": true,
+        "**/.ruff_cache": true,
+        "**/.pytest_cache": true
+    }
+}
