@@ -1,28 +1,25 @@
 import os
+import sys
 
-from torch.utils.cpp_extension import load
+from .compiler import SOURCES, CompiledLibrary
 
-pixel_norm = load(
-    name="pixel_norm",
-    sources=[
-        os.path.join(os.path.dirname(__file__), "pixel_norm.cpp"),
-        os.path.join(os.path.dirname(__file__), "pixel_norm_cuda.cu"),
-    ],
-)
+pixel_norm = None
+inplace_add = None
+
+
+def compile_and_attach_kernels():
+    for name, source_files in SOURCES.items():
+        kernel = CompiledLibrary(name=name, sources=source_files, can_rebuild=False)
+        setattr(sys.modules[__name__], name, kernel.library)
+
+
+if not os.getenv("RUNWARE_LTX_NO_COMPILE_KERNELS"):
+    compile_and_attach_kernels()
 
 
 def pixel_norm_inplace(x, scale, shift, eps=1e-5):
-    return pixel_norm.pixel_norm_inplace(x, scale, shift, eps)
-
-
-inplace_add = load(
-    name="inplace_add",
-    sources=[
-        os.path.join(os.path.dirname(__file__), "add_inplace.cpp"),
-        os.path.join(os.path.dirname(__file__), "add_inplace_cuda.cu"),
-    ],
-)
+    return pixel_norm.pixel_norm_inplace(x, scale, shift, eps)  # type: ignore - guaranteed to be there
 
 
 def add_inplace(x, workspace, offset):
-    return inplace_add.inplace_add(x, workspace, offset)
+    return inplace_add.inplace_add(x, workspace, offset)  # type: ignore - guaranteed to be there
