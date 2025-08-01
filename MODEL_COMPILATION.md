@@ -47,18 +47,6 @@ export RUNWARE_LTX_NO_COMPILE_KERNELS=1  # Disable compilation
 
 4. **Dynamic Loading**: Kernels are attached to the module namespace dynamically after compilation
 
-### Manual Compilation
-```python
-from ltx_video.models.autoencoders.vae_patcher.kernels.compiler import compiled_kernel
-import pathlib
-
-# Compile a specific kernel
-kernel = compiled_kernel(
-    name="pixel_norm",
-    sources=["pixel_norm.cpp", "pixel_norm_cuda.cu"],
-    output_directory=pathlib.Path("/custom/output/dir")
-)
-```
 
 ### Disabling Automatic Compilation
 ```python
@@ -103,4 +91,55 @@ SOURCES = {
     ]
 }
 ```
+
+### CLI Commands
+
+To compile kernels manually, you can use the provided CLI commands:
+```bash
+python -m ltx_video --help 
+```
+
+```
+LTX Video utility commands
+
+positional arguments:
+  {compile-kernels,load-all-kernels}
+                        Available commands
+    compile-kernels     Compile CUDA kernels
+    load-all-kernels    Load all compiled CUDA kernels
+
+options:
+  -h, --help            show this help message and exit
+  --verbose             Enable verbose output (default: False)
+```
+
+**Kernel Compilation Command**
+
+```bash
+python -m ltx_video compile-kernels --arch-list=sm_70;sm_75 --kernels-dir=/path/to/kernels --force-rebuild
+```
+
+```
+usage: python -m ltx_video compile-kernels [-h] [--arch-list ARCH_LIST] [--kernels-dir KERNELS_DIR] [--force-rebuild]
+
+options:
+  -h, --help            show this help message and exit
+  --arch-list ARCH_LIST
+                        CUDA architecture list (semicolon-separated)
+  --kernels-dir KERNELS_DIR
+                        Output directory for compiled kernels
+  --force-rebuild       Force rebuild of all kernels, even if they are already compiled
+```
+
+**Testing Kernel Compilation**
+
+After compiling the kernels, they can be loaded and tested using the following command, in order to test if the kernels are loading correctly:
+
+```bash
+usage: python -m ltx_video  load-all-kernels [-h] [--kernels-dir KERNELS_DIR]
+
+options:
+  -h, --help            show this help message and exit
+  --kernels-dir KERNELS_DIR
+                        Output directory for compiled kernels
 ```
