@@ -51,7 +51,8 @@ if not os.getenv("RUNWARE_LTX_NO_COMPILE_KERNELS"):
             saved_sha.write_text(hd)
         else:
             import torch.ops
-            so = torch.ops.load_library(build_repo_dir / name / f"{name}.so")
+            torch.ops.load_library(build_repo_dir / name / f"{name}.so")
+            so = getattr(torch.ops, name)
         setattr(sys.modules[__name__], name, so)  # save globally
 
 
