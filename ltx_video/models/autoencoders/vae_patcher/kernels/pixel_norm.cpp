@@ -17,7 +17,7 @@ void pixel_norm_cuda(
     cudaStream_t stream
 );
 
-void pixel_norm_inplace(at::Tensor &x, at::Tensor &scale, at::Tensor &shift, float eps) {
+at::Tensor pixel_norm_inplace(at::Tensor &x, at::Tensor &scale, at::Tensor &shift, double eps) {
     int num_pixels = x.size(2)*x.size(3)*x.size(4);
     int batch_size = x.size(0);
     int num_channels = x.size(1);
@@ -29,15 +29,20 @@ void pixel_norm_inplace(at::Tensor &x, at::Tensor &scale, at::Tensor &shift, flo
         scale.data_ptr(),
         shift.data_ptr(),
         x.data_ptr(),
-        eps,
+        static_cast<float>(eps),
         batch_size,
         num_channels,
         num_pixels,
         stream
     );
+    return x;
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("pixel_norm_inplace", &pixel_norm_inplace,
           "pixel norm inplace");
+}
+TORCH_LIBRARY(pixel_norm_inplace, m) {
+    m.def("pixel_norm_inplace(Tensor x, Tensor scale, Tensor shift, float eps) -> Tensor");
+    m.impl("pixel_norm_inplace", pixel_norm_inplace);
 }

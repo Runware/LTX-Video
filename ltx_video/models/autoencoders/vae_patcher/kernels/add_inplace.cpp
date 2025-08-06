@@ -14,7 +14,7 @@ void inplace_add_cuda(
 
 
 
-void inplace_add(at::Tensor &x, at::Tensor &workspace, int offset) {
+at::Tensor inplace_add(at::Tensor &x, at::Tensor &workspace, int64_t offset) {
     at::cuda::CUDAGuard device_guard{x.get_device()};
     auto stream = at::cuda::getCurrentCUDAStream().stream();
     inplace_add_cuda(
@@ -23,9 +23,14 @@ void inplace_add(at::Tensor &x, at::Tensor &workspace, int offset) {
         offset,
         stream
     );
+    return x;
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("inplace_add", &inplace_add,
-          "inplace_add");
+    m.def("inplace_add", &inplace_add, "inplace_add wrapper");
+}
+
+TORCH_LIBRARY(inplace_add, m) {
+    m.def("inplace_add(Tensor x, Tensor input2, int offset) -> Tensor");
+    m.impl("inplace_add", inplace_add);
 }
