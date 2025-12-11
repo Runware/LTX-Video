@@ -19,7 +19,7 @@ dependencies = [
     "diffusers>=0.28.2",
     "transformers>=4.47.2,<4.52.0",
     "sentencepiece>=0.1.96",
-    "huggingface-hub~=0.30",
+    "huggingface-hub>=1.2.1",
     "einops",
     "timm"
 ] if not os.getenv("RUNWARE_LTX_BUILD_STAGE") else []
